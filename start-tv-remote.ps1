@@ -1,9 +1,9 @@
 <#
   Inicia el control remoto del TV.
-  Uso:  .\start-tv-remote.ps1 [-Tv 192.168.20.110:5555] [-Lan] [-NoBrowser]
+  Uso:  .\start-tv-remote.ps1 [-Tv 192.168.1.50:5555] [-Lan] [-NoBrowser]
 #>
 param(
-    [string]$Tv = "192.168.20.110:5555",
+    [string]$Tv = "192.168.1.50:5555",
     [int]$Port = 8080,
     [switch]$Lan,
     [switch]$NoBrowser

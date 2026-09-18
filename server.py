@@ -314,6 +314,14 @@ class Handler(BaseHTTPRequestHandler):
         host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
         return urlparse(origin).hostname == host
 
+    def host_ok(self):
+        """Sin --lan solo se acepta acceso por localhost (frena el DNS rebinding:
+        una web externa cuyo dominio resuelva a 127.0.0.1)."""
+        if TOKEN:
+            return True
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        return host in ("127.0.0.1", "localhost", "::1")
+
     def authorized(self, qs):
         if not TOKEN:
             return True
@@ -340,6 +348,8 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         qs = parse_qs(u.query)
         p = unquote(u.path)
+        if not self.host_ok():
+            return self.send(403, {"error": "host no permitido"})
         origin = self.headers.get("Origin")
         if origin and not self.same_host(origin):
             return self.send(403, {"error": "origen no permitido"})
