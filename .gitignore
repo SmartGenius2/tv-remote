@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Logs, capturas y temporales
+*.log
+*.err
+*.tmp
+*.mp4
+tv-captura*.jpg
+
+# Editor / SO
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

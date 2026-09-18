@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control TV</title>
+<style>
+  :root {
+    --bg:#f3f4f6; --card:#fff; --ink:#15171a; --mute:#6b7280; --line:#e2e5ea;
+    --btn:#e8eaee; --btn-h:#d9dce2; --acc:#2563eb; --acc-ink:#fff;
+    --good:#16a34a; --bad:#dc2626; --warn:#d97706;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --card:#1a1d23; --ink:#e8eaee; --mute:#8b93a1; --line:#2a2f38;
+            --btn:#262a32; --btn-h:#323744; --acc:#3b82f6; --good:#22c55e; --bad:#f87171; --warn:#fbbf24; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 system-ui,sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line);
+           padding:10px 16px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:13px; }
+  header b { font-size:15px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--bad); display:inline-block; margin-right:6px; }
+  .dot.on { background:var(--good); }
+  .chip { color:var(--mute); }
+  .chip strong { color:var(--ink); font-weight:600; }
+  main { max-width:1200px; margin:0 auto; padding:16px; display:grid; gap:16px; grid-template-columns:1fr; }
+  @media (min-width:900px) {
+    main { grid-template-columns:1.5fr 1fr; align-items:start; }
+    #screen { max-height:calc(100vh - 480px); min-height:220px; }
+    main > section { position:sticky; top:64px; max-height:calc(100vh - 80px); overflow-y:auto; }
+  }
+  html, body { overflow-x:hidden; }
+  main > * { min-width:0; }
+  img, input, select { max-width:100%; }
+  details.fold { margin-top:14px; }
+  details.fold > summary { list-style:none; cursor:pointer; font-size:12px; letter-spacing:.05em; text-transform:uppercase;
+                           color:var(--mute); font-weight:600; padding:6px 0; margin-bottom:6px; user-select:none; }
+  details.fold > summary::-webkit-details-marker { display:none; }
+  details.fold > summary::after { content:'▾'; float:right; }
+  details.fold:not([open]) > summary::after { content:'▸'; }
+  details.fold > summary .hint { text-transform:none; letter-spacing:0; font-weight:400; }
+  section > details.fold:first-child { margin-top:0; }
+  @media (max-width:899px) {
+    main { padding:10px; gap:10px; }
+    main > .panel { order:1; }
+    main > section { order:2; }
+    header { padding:6px 12px; gap:2px 12px; flex-wrap:nowrap; overflow:hidden; white-space:nowrap; position:static; }
+    header .chip:nth-of-type(n+3) { display:none; }
+    details.fold > summary { padding:12px 0; font-size:13px; }
+    .hint, label:has(#kbd) { display:none; }
+    .tabs button { padding:10px 8px; }
+    .chips button { min-height:44px; }
+    .item { flex-wrap:wrap; }
+    .dpad { max-width:280px; }
+    .dpad button, .grid button { min-height:56px; font-size:16px; }
+    #screen { max-height:40vh; }
+    input[type=text] { font-size:16px; }
+  }
+  @media (max-width:420px) {
+    .grid.g4 { grid-template-columns:repeat(2,1fr); }
+    header .chip:nth-of-type(n+4) { display:none; }
+  }
+  section, .panel { background:var(--card); border-radius:14px; padding:14px; }
+  h2 { margin:0 0 10px; font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--mute); font-weight:600; }
+  h2:not(:first-child) { margin-top:16px; }
+  #screenwrap { position:relative; }
+  #screen { width:100%; aspect-ratio:16/9; background:#000; border-radius:8px; display:block; object-fit:contain; cursor:crosshair; }
+  #screen:fullscreen { cursor:crosshair; }
+  .row { display:flex; align-items:center; gap:10px; margin-top:10px; color:var(--mute); font-size:13px; flex-wrap:wrap; }
+  button, select { font:inherit; color:var(--ink); background:var(--btn); border:0; border-radius:10px; padding:10px 12px; cursor:pointer; min-height:42px; }
+  button:hover { background:var(--btn-h); }
+  button:active { transform:scale(.97); }
+  button:disabled { opacity:.5; cursor:default; }
+  button.ok { background:var(--acc); color:var(--acc-ink); font-weight:600; }
+  button.danger { color:var(--bad); }
+  button.sm { padding:5px 10px; min-height:30px; font-size:13px; }
+  .tabs { display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; }
+  .tabs button { flex:1; min-width:max-content; }
+  .tabs button[aria-selected=true] { background:var(--acc); color:var(--acc-ink); }
+  .dpad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:250px; margin:0 auto 12px; }
+  .dpad button { min-height:52px; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .grid.g4 { grid-template-columns:repeat(4,1fr); }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chips button { padding:8px 12px; min-height:36px; font-size:13px; }
+  form.inline { display:flex; gap:8px; margin-top:12px; }
+  input[type=text], input[type=search] { flex:1; min-width:0; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font:inherit; }
+  .bar { height:8px; border-radius:4px; background:var(--btn); overflow:hidden; margin:4px 0 10px; }
+  .bar > i { display:block; height:100%; background:var(--acc); }
+  .bar > i.hi { background:var(--warn); }
+  .kv { display:flex; justify-content:space-between; font-size:13px; }
+  .list { display:grid; }
+  .item { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  .item:last-child { border-bottom:0; }
+  .item .name { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .item .meta { color:var(--mute); white-space:nowrap; }
+  .item .name.link { cursor:pointer; color:var(--acc); }
+  .tag { font-size:11px; color:var(--mute); border:1px solid var(--line); border-radius:6px; padding:1px 6px; }
+  .note { color:var(--mute); font-size:12px; margin:6px 0 0; }
+  #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:var(--bg);
+           padding:10px 16px; border-radius:10px; font-size:14px; opacity:0; pointer-events:none; transition:opacity .2s; max-width:90vw; z-index:9; }
+  #toast.show { opacity:1; }
+  :focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <b>Control TV</b>
+  <span class="chip"><span class="dot" id="dot"></span><span id="conn">Conectando…</span></span>
+  <span class="chip">App: <strong id="fg">—</strong></span>
+  <span class="chip">RAM libre: <strong id="hram">—</strong></span>
+  <span class="chip">Disco libre: <strong id="hdisk">—</strong></span>
+  <span class="chip">Pantalla: <strong id="hwake">—</strong></span>
+</header>
+
+<main>
+  <section>
+    <details class="fold" id="preview" open>
+    <summary>📺 Pantalla del TV <span class="hint">(clic en la imagen = tocar ese punto)</span></summary>
+    <div id="screenwrap"><img id="screen" alt="Captura del TV"></div>
+    <div class="row">
+      <label><input type="checkbox" id="auto" checked> Actualizar cada 2 s</label>
+      <button class="sm" id="snap" type="button">🔄 Actualizar</button>
+      <button class="sm" id="full" type="button">⛶ Pantalla completa</button>
+      <a id="dlshot" href="#" download="tv-captura.jpg"><button class="sm" type="button">💾 Descargar captura</button></a>
+    </div>
+    </details>
+    <h2>⌨️ Escribir en el TV</h2>
+    <form class="inline" id="tf"><input type="text" id="txt" placeholder="Solo ASCII (sin tildes ni ñ)" autocomplete="off"><button type="submit">📨 Enviar</button></form>
+    <div class="row"><label><input type="checkbox" id="kbd"> Usar el teclado del PC como mando</label></div>
+    <p class="note" id="kbdnote" hidden>Flechas · Enter=OK · Esc/Retroceso=Atrás · Inicio=Home · Espacio=Play/Pausa · + / − = Volumen · M=Silencio · S=Ajustes</p>
+    <h2>🚀 Apps</h2>
+    <div class="chips" id="quick"></div>
+  </section>
+
+  <div class="panel">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="remote" aria-selected="true">🎮 Mando</button>
+      <button role="tab" data-tab="system" aria-selected="false">📊 Sistema</button>
+      <button role="tab" data-tab="apps" aria-selected="false">🧩 Apps</button>
+      <button role="tab" data-tab="files" aria-selected="false">📁 Archivos</button>
+    </div>
+
+    <!-- MANDO -->
+    <div id="tab-remote" role="tabpanel">
+      <div class="dpad">
+        <span></span><button data-k="up" aria-label="Arriba">▲</button><span></span>
+        <button data-k="left" aria-label="Izquierda">◀</button><button data-k="ok" class="ok">OK</button><button data-k="right" aria-label="Derecha">▶</button>
+        <span></span><button data-k="down" aria-label="Abajo">▼</button><span></span>
+      </div>
+      <div class="grid">
+        <button data-k="back">↩️ Atrás</button><button data-k="home">🏠 Inicio</button><button data-k="menu">☰ Menú</button>
+        <button data-k="rewind" title="Mantén pulsado para saltar">⏪</button><button data-k="playpause">⏯️</button><button data-k="forward" title="Mantén pulsado para saltar">⏩</button>
+        <button data-k="prev">⏮️</button><button data-k="search">🔍 Buscar</button><button data-k="next">⏭️</button>
+        <button data-k="voldown">🔉 Vol −</button><button data-k="mute">🔇 Silencio</button><button data-k="volup">🔊 Vol +</button>
+      </div>
+      <p class="note">Mantén pulsada una tecla (≈0,6 s) para enviar pulsación larga.</p>
+
+      <details class="fold" open><summary>🔌 Entradas</summary>
+      <div class="grid g4">
+        <button data-k="hdmi1">HDMI 1</button><button data-k="hdmi2">HDMI 2</button><button data-k="hdmi3">HDMI 3</button><button data-k="tvinput">📺 Fuente</button>
+      </div></details>
+      <details class="fold" open><summary>⚡ Energía</summary>
+      <div class="grid">
+        <button data-k="wake">☀️ Despertar</button><button data-k="sleep">🌙 Dormir</button><button class="danger" id="reboot">🔄 Reiniciar</button>
+      </div></details>
+      <details class="fold" open><summary>⚙️ Ajustes y menús</summary>
+      <div id="settings"></div></details>
+    </div>
+
+    <!-- SISTEMA -->
+    <div id="tab-system" role="tabpanel" hidden>
+      <h2>📈 Estado</h2>
+      <div class="kv"><span>🧠 Memoria RAM</span><span id="s-ram">—</span></div>
+      <div class="bar"><i id="b-ram" style="width:0"></i></div>
+      <div class="kv"><span>💾 Almacenamiento</span><span id="s-disk">—</span></div>
+      <div class="bar"><i id="b-disk" style="width:0"></i></div>
+      <div class="kv"><span>⏱️ Tiempo encendido</span><span id="s-up">—</span></div>
+      <div class="kv"><span>🏷️ Versión de firmware</span><span id="s-build">—</span></div>
+      <h2>🚀 Rendimiento</h2>
+      <div class="chips">
+        <button id="clean">🧹 Limpiar memoria y cachés</button>
+      </div>
+      <p class="note" id="cleanres"></p>
+      <div class="row"><label>Animaciones
+        <select id="anim"><option value="0">Desactivadas</option><option value="0.5">Rápidas (0,5×)</option><option value="1">Normales (1×)</option></select></label>
+        <label><input type="checkbox" id="ss"> Salvapantallas activado</label></div>
+      <h2>🎥 Grabar pantalla</h2>
+      <div class="chips">
+        <button id="recstart">🔴 Grabar (máx. 3 min)</button><button id="recstop" disabled>⏹️ Detener</button>
+        <a id="recdl" href="#"><button type="button">⬇️ Descargar vídeo</button></a>
+      </div>
+      <h2>📦 Instalar APK</h2>
+      <div class="row"><input type="file" id="apk" accept=".apk"><button id="apkgo" class="ok">📲 Instalar</button></div>
+      <p class="note">Se instala sobre la versión actual (conserva datos). El APK debe ser compatible con ARM de 32 bits.</p>
+    </div>
+
+    <!-- APPS -->
+    <div id="tab-apps" role="tabpanel" hidden>
+      <div class="row" style="margin-top:0"><input type="search" id="pfilter" placeholder="🔎 Filtrar paquetes…"><button class="sm" id="preload">🔄 Recargar</button></div>
+      <div id="plist"><p class="note">Abre esta pestaña para cargar la lista…</p></div>
+    </div>
+
+    <!-- ARCHIVOS -->
+    <div id="tab-files" role="tabpanel" hidden>
+      <div class="row" style="margin-top:0"><strong id="fpath">/sdcard</strong><button class="sm" id="fup">⬆️ Subir nivel</button></div>
+      <div class="list" id="flist"></div>
+      <h2>📤 Subir archivo a esta carpeta</h2>
+      <div class="row"><input type="file" id="upfile"><button id="upgo" class="ok">📤 Subir</button></div>
+    </div>
+  </div>
+</main>
+<div id="toast" role="status"></div>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get('t');
+// Si la página la sirve Apache (otro puerto), la API está en el puerto 8080 del mismo host
+const API = location.port === '8080' ? '' : location.protocol + '//' + location.hostname + ':8080';
+const $ = s => document.querySelector(s);
+const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+const url = (path, params = {}) => {
+  const p = new URLSearchParams(params); if (TOKEN) p.set('t', TOKEN);
+  const s = p.toString(); return API + path + (s ? '?' + s : '');
+};
+const fmtB = n => n == null ? '—' : n >= 1e9 ? (n / 1e9).toFixed(1) + ' GB' : n >= 1e6 ? (n / 1e6).toFixed(0) + ' MB' : (n / 1e3).toFixed(0) + ' KB';
+const fmtT = s => { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + ' d ' : '') + h + ' h ' + m + ' min'; };
+
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3500); }
+async function call(path, params, opts = {}) {
+  try {
+    const r = await fetch(url(path, params), opts);
+    const ct = r.headers.get('content-type') || '';
+    const data = ct.includes('json') ? await r.json() : r;
+    if (!r.ok) throw new Error((data && (data.error || data.message)) || 'Error ' + r.status);
+    return data;
+  } catch (e) { toast(e.message || 'Sin conexión con el servidor'); throw e; }
+}
+const post = (path, params, body, headers) => call(path, params, { method: 'POST', body, headers });
+
+/* ---------- pantalla ---------- */
+let busy = false;
+async function refreshShot() {
+  if (busy || document.hidden || !$('#preview').open) return; busy = true;
+  try {
+    const r = await fetch(url('/shot.jpg', { n: Date.now() }));
+    if (r.ok) { const u = URL.createObjectURL(await r.blob()); const old = $('#screen').src; $('#screen').src = u; if (old.startsWith('blob:')) URL.revokeObjectURL(old); }
+  } catch (e) {} finally { busy = false; }
+}
+$('#snap').onclick = refreshShot;
+$('#full').onclick = () => $('#screen').requestFullscreen?.();
+$('#dlshot').onclick = e => { e.currentTarget.href = url('/shot.jpg', { scale: 1 }); };
+$('#screen').onclick = async e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  await post('/tap', { x: ((e.clientX - r.left) / r.width).toFixed(4), y: ((e.clientY - r.top) / r.height).toFixed(4) });
+  setTimeout(refreshShot, 500);
+};
+setInterval(() => $('#auto').checked && refreshShot(), 2000);
+// En escritorio los bloques plegables arrancan abiertos; en el móvil, cerrados
+const desktop = matchMedia('(min-width:900px)').matches;
+document.querySelectorAll('details.fold').forEach(d => d.open = desktop);
+$('#preview').addEventListener('toggle', () => { if ($('#preview').open) refreshShot(); });
+
+/* ---------- estado ---------- */
+async function refreshInfo() {
+  if (document.hidden) return;
+  try {
+    const h = await (await fetch(url('/health'))).json();
+    $('#dot').classList.toggle('on', h.connected); $('#conn').textContent = h.connected ? 'TV conectado' : 'TV sin conexión';
+    if (!h.connected) return;
+    const d = await (await fetch(url('/info'))).json();
+    if (!d.ok) return;
+    $('#fg').textContent = d.foreground || '—';
+    $('#hram').textContent = fmtB(d.ram.free); $('#hdisk').textContent = fmtB(d.storage.free);
+    $('#hwake').textContent = { Awake: 'Encendida', Dreaming: 'Salvapantallas', Asleep: 'Apagada' }[d.wakefulness] || d.wakefulness || '—';
+    $('#s-ram').textContent = fmtB(d.ram.used) + ' usados de ' + fmtB(d.ram.total);
+    setBar('#b-ram', d.ram.used / d.ram.total);
+    $('#s-disk').textContent = fmtB(d.storage.used) + ' usados de ' + fmtB(d.storage.total);
+    setBar('#b-disk', d.storage.used / d.storage.total);
+    $('#s-up').textContent = fmtT(d.uptime_s); $('#s-build').textContent = d.build || '—';
+    if (document.activeElement !== $('#anim') && d.anim) $('#anim').value = ['0', '0.5', '1'].includes(String(parseFloat(d.anim))) ? String(parseFloat(d.anim)) : '1';
+    if (document.activeElement !== $('#ss')) $('#ss').checked = d.screensaver !== '0';
+    $('#recstart').disabled = d.recording; $('#recstop').disabled = !d.recording;
+  } catch (e) { $('#dot').classList.remove('on'); $('#conn').textContent = 'Servidor no responde'; }
+}
+function setBar(sel, f) { const b = $(sel); b.style.width = Math.round(f * 100) + '%'; b.classList.toggle('hi', f > 0.85); }
+setInterval(refreshInfo, 10000);
+
+/* ---------- mando ---------- */
+const sendKey = async (k, long) => { await post('/key/' + k, long ? { long: 1 } : {}); setTimeout(refreshShot, 400); };
+document.querySelectorAll('[data-k]').forEach(b => {
+  let t, long = false;
+  const down = () => { long = false; t = setTimeout(() => { long = true; sendKey(b.dataset.k, true); }, 600); };
+  const up = () => { clearTimeout(t); };
+  b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointerleave', up);
+  b.addEventListener('click', () => { if (!long) sendKey(b.dataset.k, false); });
+});
+$('#reboot').onclick = async () => { if (confirm('¿Reiniciar el TV?')) { await post('/power/reboot'); toast('Reiniciando… tardará ~1 min'); } };
+$('#tf').onsubmit = async e => {
+  e.preventDefault(); const v = $('#txt').value; if (!v) return;
+  const r = await post('/text', {}, JSON.stringify({ text: v }));
+  if (r.sent !== v.replaceAll(' ', '%s')) toast('Se omitieron caracteres no ASCII (tildes, ñ, emojis)');
+  $('#txt').value = ''; setTimeout(refreshShot, 400);
+};
+const APP_NAMES = {
+  'com.android.mgstv': '🎬 MGS TV', 'com.cinehax': '🍿 Cinehax', 'com.cxinventor.file.explorer': '📁 Archivos',
+  'com.spocky.projengmenu': '🏠 Projectivy', 'com.spotify.tv.android': '🎵 Spotify', 'org.mozilla.firefox': '🦊 Firefox',
+  'org.smarttube.beta': '▶️ SmartTube', 'com.rcntv.rcntv': '📺 RCN TV', 'com.cybercat.acbridge': '🔗 AC Bridge',
+};
+const appLabel = p => APP_NAMES[p] || '📱 ' + (p.split('.').pop().replace(/^./, c => c.toUpperCase()));
+const SET_GROUPS = [
+  ['Principal', [['general', '⚙️ Ajustes'], ['home', '🏠 Pantalla de inicio']]],
+  ['Conexión y sonido', [['wifi', '📶 Wi-Fi'], ['sound', '🔊 Sonido']]],
+  ['Apps y almacenamiento', [['apps', '🧩 Aplicaciones'], ['storage', '💾 Almacenamiento']]],
+  ['Sistema', [['update', '⬆️ Actualización'], ['about', 'ℹ️ Acerca de'], ['date', '🕒 Fecha y hora'], ['locale', '🌐 Idioma']]],
+  ['Preferencias', [['keyboard', '⌨️ Teclado'], ['accessibility', '♿ Accesibilidad'], ['privacy', '🔒 Privacidad']]],
+  ['Avanzado', [['dev', '🧪 Opciones de desarrollador']]],
+];
+$('#settings').replaceChildren(...SET_GROUPS.flatMap(([title, items]) => [
+  el('div', { className: 'note', textContent: title, style: 'margin:10px 0 4px;font-weight:600' }),
+  el('div', { className: 'chips' }, ...items.map(([k, l]) => el('button', { textContent: l, onclick: async () => { await post('/settings/' + k); setTimeout(refreshShot, 1200); } }))),
+]));
+$('#kbd').onchange = e => { $('#kbdnote').hidden = !e.target.checked; };
+const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'ok', Escape: 'back', Backspace: 'back', Home: 'home', ' ': 'playpause', '+': 'volup', '=': 'volup', '-': 'voldown', m: 'mute', s: 'settings' };
+document.addEventListener('keydown', e => {
+  if (!$('#kbd').checked || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = KEYMAP[e.key]; if (k) { e.preventDefault(); if (!e.repeat) sendKey(k, false); }
+});
+async function loadQuick() {
+  try {
+    const apps = await (await fetch(url('/apps'))).json();
+    $('#quick').replaceChildren(...apps.map(p => el('button', { textContent: appLabel(p), title: p, onclick: async () => { await post('/launch/' + p); setTimeout(refreshShot, 1500); } })));
+  } catch (e) {}
+}
+
+/* ---------- sistema ---------- */
+$('#clean').onclick = async () => {
+  $('#clean').disabled = true; $('#cleanres').textContent = 'Limpiando…';
+  try { const r = await post('/clean'); $('#cleanres').textContent = 'RAM libre: ' + fmtB(r.free_before) + ' → ' + fmtB(r.free_after); refreshInfo(); }
+  finally { $('#clean').disabled = false; }
+};
+$('#anim').onchange = async e => { await post('/setting/anim', { v: e.target.value }); toast('Animaciones actualizadas'); };
+$('#ss').onchange = async e => { await post('/setting/screensaver', { v: e.target.checked ? 1 : 0 }); toast('Salvapantallas ' + (e.target.checked ? 'activado' : 'desactivado')); };
+$('#recstart').onclick = async () => { await post('/record/start'); toast('Grabando…'); refreshInfo(); };
+$('#recstop').onclick = async () => { $('#recstop').disabled = true; await post('/record/stop'); toast('Grabación detenida'); refreshInfo(); };
+$('#recdl').onclick = e => { e.currentTarget.href = url('/record/download'); };
+$('#apkgo').onclick = async () => {
+  const f = $('#apk').files[0]; if (!f) return toast('Elige un archivo .apk');
+  $('#apkgo').disabled = true; toast('Instalando ' + f.name + '… puede tardar');
+  try { const r = await post('/install', {}, f, { 'Content-Type': 'application/octet-stream' }); toast(r.ok ? 'Instalado: ' + f.name : 'Falló: ' + r.message); }
+  finally { $('#apkgo').disabled = false; }
+};
+
+/* ---------- apps ---------- */
+let PK = null;
+async function loadPackages() {
+  $('#plist').replaceChildren(el('p', { className: 'note', textContent: 'Cargando… (unos segundos)' }));
+  try { PK = await call('/packages'); renderPackages(); } catch (e) { $('#plist').replaceChildren(); }
+}
+function renderPackages() {
+  if (!PK) return;
+  const f = $('#pfilter').value.trim().toLowerCase();
+  const match = p => !f || p.pkg.toLowerCase().includes(f);
+  const act = async (a, pkg, msg) => { await post('/pkg/' + a + '/' + pkg); if (msg) toast(msg); if (a !== 'open' && a !== 'stop') loadPackages(); };
+  const row = (p, btns, tag) => el('div', { className: 'item' }, el('span', { className: 'name', textContent: p.pkg }), tag ? el('span', { className: 'tag', textContent: tag }) : '', p.size ? el('span', { className: 'meta', textContent: fmtB(p.size) }) : '', ...btns);
+  const btn = (t, fn, cls = '') => el('button', { className: 'sm ' + cls, textContent: t, onclick: fn });
+  const section = (title, items, mk) => [el('h2', { textContent: title + ' (' + items.length + ')' }), el('div', { className: 'list' }, ...items.map(mk))];
+  const user = PK.user.filter(match), sys = PK.system.filter(match), dis = PK.disabled.filter(match);
+  $('#plist').replaceChildren(
+    ...section('Instaladas por ti', user, p => row(p, [
+      btn('Abrir', () => act('open', p.pkg)), btn('Cerrar', () => act('stop', p.pkg, 'Cerrada')),
+      btn('Desinstalar', () => confirm('¿Desinstalar ' + p.pkg + '?') && act('uninstall', p.pkg, 'Desinstalada'), 'danger')])),
+    ...section('Sistema (activas)', sys, p => row(p, [
+      p.protected ? el('span', { className: 'tag', textContent: 'protegida' })
+        : btn('Desactivar', () => confirm('¿Desactivar ' + p.pkg + '?\nPodrás reactivarla desde la lista de desactivadas.') && act('disable', p.pkg, 'Desactivada'))])),
+    ...section('Desactivadas', dis, p => row(p, [btn('Activar', () => act('enable', p.pkg, 'Reactivada'))])));
+}
+$('#pfilter').oninput = renderPackages; $('#preload').onclick = loadPackages;
+
+/* ---------- archivos ---------- */
+let cwd = '/sdcard';
+async function loadDir(path) {
+  try {
+    const d = await call('/files', { path }); cwd = d.path; $('#fpath').textContent = cwd;
+    $('#flist').replaceChildren(...(d.items.length ? d.items.map(i => el('div', { className: 'item' },
+      el('span', i.dir ? { className: 'name link', textContent: '📁 ' + i.name, onclick: () => loadDir(cwd + '/' + i.name) } : { className: 'name', textContent: i.name }),
+      el('span', { className: 'meta', textContent: i.dir ? i.mtime : fmtB(i.size) + ' · ' + i.mtime }),
+      i.dir ? '' : el('a', { href: url('/download', { path: cwd + '/' + i.name }) }, el('button', { className: 'sm', textContent: 'Bajar' })))) : [el('p', { className: 'note', textContent: 'Carpeta vacía o sin permiso de lectura.' })]));
+  } catch (e) {}
+}
+$('#fup').onclick = () => loadDir(cwd.split('/').slice(0, -1).join('/') || '/sdcard');
+$('#upgo').onclick = async () => {
+  const f = $('#upfile').files[0]; if (!f) return toast('Elige un archivo');
+  $('#upgo').disabled = true; toast('Subiendo ' + f.name + '…');
+  try { const r = await post('/upload', { path: cwd }, f, { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(f.name) }); toast(r.ok ? 'Subido: ' + f.name : 'Falló: ' + r.message); loadDir(cwd); }
+  finally { $('#upgo').disabled = false; }
+};
+
+/* ---------- pestañas ---------- */
+document.querySelectorAll('[data-tab]').forEach(t => t.onclick = () => {
+  document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === t));
+  ['remote', 'system', 'apps', 'files'].forEach(n => $('#tab-' + n).hidden = n !== t.dataset.tab);
+  if (t.dataset.tab === 'apps' && !PK) loadPackages();
+  if (t.dataset.tab === 'files' && !$('#flist').children.length) loadDir(cwd);
+  if (t.dataset.tab === 'system') refreshInfo();
+});
+
+loadQuick(); refreshInfo(); refreshShot();
+</script>
+</body>
+</html>
