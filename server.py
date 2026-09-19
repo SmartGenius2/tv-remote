@@ -4,7 +4,7 @@ Uso:  python server.py [--tv IP:5555] [--port 8080] [--lan]
 Por defecto escucha solo en 127.0.0.1. Con --lan escucha en toda la red y
 exige el token que se imprime al arrancar (?t=TOKEN o cabecera X-Token).
 """
-import argparse, gzip, io, json, posixpath, re, secrets, struct, subprocess, sys, tempfile, time
+import argparse, gzip, hmac, io, json, posixpath, re, secrets, struct, subprocess, sys, tempfile, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote, quote
@@ -290,6 +290,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")  # evita clickjacking sobre el mando
+        self.send_header("Referrer-Policy", "no-referrer")  # el token va en la URL
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.cors()
@@ -325,7 +328,8 @@ class Handler(BaseHTTPRequestHandler):
     def authorized(self, qs):
         if not TOKEN:
             return True
-        return qs.get("t", [""])[0] == TOKEN or self.headers.get("X-Token") == TOKEN
+        given = qs.get("t", [""])[0] or self.headers.get("X-Token") or ""
+        return hmac.compare_digest(given.encode(), TOKEN.encode())
 
     def save_body(self, suffix):
         n = int(self.headers.get("Content-Length", 0))
@@ -414,6 +418,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(200, {"ok": True})
                 if p == "/text":
                     n = int(self.headers.get("Content-Length", 0))
+                    if not 0 < n <= 65536:
+                        raise ValueError("texto demasiado largo")
                     text = json.loads(self.rfile.read(n)).get("text", "")
                     return self.send(200, {"ok": True, "sent": send_text(text)})
                 if p.startswith("/launch/"):
