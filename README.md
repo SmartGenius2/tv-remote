@@ -2,6 +2,8 @@
 
 [Español](#español) · [English](#english)
 
+<p align="center"><img src="docs/screenshot-mobile.png" alt="Interfaz del mando (vista móvil)" width="320"></p>
+
 ---
 
 ## Español
